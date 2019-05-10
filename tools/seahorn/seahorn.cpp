@@ -25,6 +25,7 @@
 #include "seahorn/HornCex.hh"
 #include "seahorn/HornSolver.hh"
 #include "seahorn/HornWrite.hh"
+#include "seahorn/VmtWrite.hh"
 #include "seahorn/HornifyModule.hh"
 #include "seahorn/Houdini.hh"
 #include "seahorn/Passes.hh"
@@ -152,6 +153,10 @@ static llvm::cl::opt<seahorn::bmc_engine_t>
 
 static llvm::cl::opt<bool>
     BoogieOutput("boogie", llvm::cl::desc("Translate llvm bitcode to boogie"),
+                 llvm::cl::init(false));
+
+static llvm::cl::opt<bool>
+    VmtOutput("vmt", llvm::cl::desc("Translate llvm bitcode to vmt"),
                  llvm::cl::init(false));
 
 static llvm::cl::opt<bool> OneAssumePerBlock(
@@ -381,6 +386,14 @@ int main(int argc, char **argv) {
       out = &llvm::outs();
     }
     pass_manager.add(seahorn::createBoogieWriterPass(out, Crab));
+  } else if (VmtOutput) {
+    llvm::raw_ostream *out = nullptr;
+    if (!OutputFilename.empty()) {
+      out = &output->os();
+    } else {
+      out = &llvm::outs();
+    }
+    pass_manager.add(new seahorn::VmtWrite(output->os()));
   } else {
     if (!OutputFilename.empty())
       pass_manager.add(new seahorn::HornWrite(output->os()));

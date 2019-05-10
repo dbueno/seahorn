@@ -14,6 +14,7 @@
 #include "seahorn/LiveSymbols.hh"
 
 #include "seahorn/HornClauseDB.hh"
+#include "seahorn/TransRelationDB.hh"
 #include "seahorn/Analysis/CutPointGraph.hh"
 namespace seahorn
 {
@@ -31,6 +32,7 @@ namespace seahorn
     ExprFactory m_efac;
     EZ3 m_zctx;
     HornClauseDB m_db;
+    TransRelationDB m_tdb;
 
     const DataLayout *m_td;
     const CanFail *m_canFail;
@@ -46,6 +48,7 @@ namespace seahorn
     ExprFactory& getExprFactory () {return m_efac;}
     EZ3 &getZContext () {return m_zctx;}
     HornClauseDB& getHornClauseDB () {return m_db;}
+    TransRelationDB& getTransRelationDB () {return m_tdb;}
     virtual bool runOnModule (Module &M);
     virtual bool runOnFunction (Function &F);
     virtual void getAnalysisUsage (AnalysisUsage &AU) const;

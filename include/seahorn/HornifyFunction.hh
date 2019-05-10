@@ -37,6 +37,7 @@ namespace seahorn
 
     LegacyOperationalSemantics &m_sem;
     HornClauseDB &m_db;
+    TransRelationDB &m_tdb;
     EZ3 &m_zctx;
     ExprFactory &m_efac;
 
@@ -49,6 +50,7 @@ namespace seahorn
     HornifyFunction (HornifyModule &parent, bool interproc = false) :
       m_parent (parent), m_sem (m_parent.symExec ()),
       m_db (m_parent.getHornClauseDB ()),
+      m_tdb (m_parent.getTransRelationDB ()),
       m_zctx (parent.getZContext ()),
       m_efac (m_zctx.getExprFactory ()), m_interproc (interproc) {}
 

@@ -29,6 +29,7 @@
 #include "ufo/Smt/EZ3.hh"
 
 #include "seahorn/FlatHornifyFunction.hh"
+#include "seahorn/BvFlatHornifyFunction.hh"
 #include "seahorn/HornifyFunction.hh"
 #include "seahorn/IncHornifyFunction.hh"
 
@@ -53,6 +54,7 @@ enum Step {
   CLP_FLAT_SMALL_STEP,
   FLAT_SMALL_STEP,
   FLAT_LARGE_STEP,
+  BV_FLAT_LARGE_STEP,
   INC_SMALL_STEP
 };
 }
@@ -64,6 +66,8 @@ static llvm::cl::opt<enum hm_detail::Step> Step(
         clEnumValN(hm_detail::LARGE_STEP, "large", "Large Step"),
         clEnumValN(hm_detail::FLAT_SMALL_STEP, "fsmall", "Flat Small Step"),
         clEnumValN(hm_detail::FLAT_LARGE_STEP, "flarge", "Flat Large Step"),
+        clEnumValN(hm_detail::BV_FLAT_LARGE_STEP, "bvflarge",
+                   "Bit Vector Flat Large Step"),
         clEnumValN(hm_detail::CLP_SMALL_STEP, "clpsmall", "CLP Small Step"),
         clEnumValN(hm_detail::CLP_FLAT_SMALL_STEP, "clpfsmall",
                    "CLP Flat Small Step"),
@@ -122,7 +126,8 @@ bool shouldBeAbstracted(const Function &fn) {
 }
 
 HornifyModule::HornifyModule()
-    : ModulePass(ID), m_zctx(m_efac), m_db(m_efac), m_td(0), m_canFail(0) {}
+    : ModulePass(ID), m_zctx(m_efac), m_db(m_efac), m_tdb(m_efac), m_td(0),
+    m_canFail(0) {}
 
 bool HornifyModule::runOnModule(Module &M) {
   ScopedStats _st("HornifyModule");
@@ -141,6 +146,8 @@ bool HornifyModule::runOnModule(Module &M) {
   if (Step == hm_detail::CLP_SMALL_STEP ||
       Step == hm_detail::CLP_FLAT_SMALL_STEP)
     m_sem.reset(new ClpOpSem(m_efac, *this, M.getDataLayout(), TL));
+  else if (Step == hm_detail::BV_FLAT_LARGE_STEP)
+    m_sem.reset(new BvOpSem(m_efac, *this, M.getDataLayout(), TL));
   else
     m_sem.reset(new UfoOpSem(m_efac, *this, M.getDataLayout(), TL, abs_fns));
 
@@ -365,6 +372,8 @@ bool HornifyModule::runOnFunction(Function &F) {
     hf.reset(new FlatSmallHornifyFunction(*this, InterProc));
   else if (Step == hm_detail::FLAT_LARGE_STEP)
     hf.reset(new FlatLargeHornifyFunction(*this, InterProc));
+  else if (Step == hm_detail::BV_FLAT_LARGE_STEP)
+    hf.reset(new BvFlatLargeHornifyFunction(*this, InterProc));
   else if (Step == hm_detail::INC_SMALL_STEP)
     hf.reset(new IncSmallHornifyFunction(*this, InterProc));
 

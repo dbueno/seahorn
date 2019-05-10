@@ -7,8 +7,10 @@ add_llvm_library (seahorn.LIB
   HornifyModule.cc
   HornifyFunction.cc
   FlatHornifyFunction.cc
+  BvFlatHornifyFunction.cc
   IncHornifyFunction.cc
   HornWrite.cc
+  VmtWrite.cc
   HornSolver.cc
   Houdini.cc
   HornModelConverter.cc
@@ -20,6 +22,7 @@ add_llvm_library (seahorn.LIB
   ClpWrite.cc
   HornClauseDB.cc
   HornClauseDBTransf.cc
+  TransRelationDB.cc
   PathBasedBmc.cc
   Bmc.cc    
   BmcPass.cc
