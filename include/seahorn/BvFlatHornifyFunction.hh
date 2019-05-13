@@ -23,6 +23,9 @@ namespace seahorn
       HornifyFunction (parent, interproc) {}
 
     virtual void runOnFunction (Function &F);
+
+  private:
+    void walkToRoots(ExprSet& vars, SymStore& s, ExprVector& rooted_out);
   };
 
   class BvFlatSmallHornifyFunction : public HornifyFunction

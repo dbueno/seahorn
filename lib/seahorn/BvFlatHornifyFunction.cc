@@ -217,6 +217,27 @@ namespace seahorn
     else if (!exit & m_interproc) assert (0);
 
   }
+    
+
+using namespace std;
+void BvFlatLargeHornifyFunction::walkToRoots(
+    ExprSet& vars, SymStore& s, ExprVector& rooted_out) {
+  auto lookup = [&](const Expr& e) {
+    if (s.isDefined(e)) {
+      assert(false);
+      return VisitAction::changeTo(s.read(e));
+    }
+    return VisitAction::doKids();
+  };
+  // print defs
+  for (const Expr& d : s.defs()) {
+    cerr << "def: " << *d << "\n";
+  }
+  DagVisit<decltype(lookup)> find_def_visitor(lookup);
+  for (const Expr& v : vars) {
+    rooted_out.push_back(find_def_visitor(v));
+  }
+}
 
   void BvFlatLargeHornifyFunction::runOnFunction (Function &F)
   {
@@ -233,6 +254,7 @@ namespace seahorn
 
     DenseMap<const BasicBlock*, unsigned> cpgOrder;
     DenseMap<const BasicBlock*, Expr> cpg_location;
+    DenseMap<const BasicBlock*, Expr> cpg_location_next;
     // globally live
     ExprSet glive;
 
@@ -240,8 +262,10 @@ namespace seahorn
     for (const CutPoint &cp : cpg)
     {
       cpgOrder [&cp.bb ()] = idx;
-      cpg_location[&cp.bb()] = bind::boolConst
+      cpg_location [&cp.bb()] = bind::boolConst
           (mkTerm<std::string> ("pc" + std::to_string (idx), m_efac));
+      cpg_location_next [&cp.bb()] = bind::boolConst
+          (mkTerm<std::string> ("pc" + std::to_string (idx) + ".next", m_efac));
       m_tdb.registerLocation(cpg_location[&cp.bb()]);
       idx++;
 
@@ -292,7 +316,7 @@ namespace seahorn
     s.write(cpg_location [&entry], mk<TRUE> (m_efac));
     ExprVector my_args;
     my_args.push_back (s.read (cpg_location [&entry]));
-    m_tdb.addTransition (cpg_location [&entry], my_args);
+    //m_tdb.addTransition (cpg_location [&entry], my_args);
 
     VCGen vcgen(m_sem);
     ExprSet my_vars;
@@ -312,8 +336,9 @@ namespace seahorn
           for (const Expr &v : glive) args.push_back (s.read (v));
           allVars.insert (++args.begin (), args.end ());
 
-          s.write(cpg_location[&cp.bb()], mk<TRUE>(m_efac));
-          Expr at_loc = s.read(cpg_location[&cp.bb()]);
+          ExprSet allVarsCopy(allVars);
+          s.write (cpg_location [&cp.bb()], mk<TRUE> (m_efac));
+          Expr at_loc = cpg_location [&cp.bb()];
           for (const Expr& v : glive) my_args.push_back(s.read(v));
 
           Expr pre = bind::fapp (step, args);
@@ -325,6 +350,19 @@ namespace seahorn
           expr::filter (tau, bind::IsConst(),
                         std::inserter (allVars, allVars.begin ()));
 
+          // I wanted to look at the variables mapped in the store and use
+          // those to recover a definition of each next-state in terms of
+          // current-state variables. But now it looks like the stores are
+          // empty?? And VCGen only seems to call "addSide" on the context. So,
+          // yeah, it's not putting things in the store like that. Sigh.
+          ExprVector rooted;
+          walkToRoots(allVarsCopy, s, rooted);
+          int i = 0;
+          for (const Expr& e : allVarsCopy) {
+            using namespace std;
+            cerr << *e << " maps to " << rooted[i++] << "\n";
+          }
+
           const BasicBlock &dst = edge->target ().bb ();
           args.clear ();
 
@@ -333,12 +371,14 @@ namespace seahorn
           for (const Expr &v : glive) args.push_back (s.read (v));
           allVars.insert (++args.begin (), args.end ());
 
-          s.write(cpg_location[&dst], mk<TRUE>(m_efac));
-          Expr at_dst = s.read(cpg_location[&dst]);
-          m_tdb.addTransition(tau, args);
+          Expr loc_pre = boolop::land (at_loc, tau);
+          s.write (cpg_location [&dst], mk<TRUE> (m_efac));
+          Expr at_dst = cpg_location_next [&dst];
+          args.push_back(at_dst);
+          m_tdb.addTransition (loc_pre, args);
 
-          Expr post = bind::fapp (step, args);
-          m_db.addRule (allVars, boolop::limp (boolop::land (pre, tau), post));
+          //Expr post = bind::fapp (step, args);
+          //m_db.addRule (allVars, boolop::limp (boolop::land (pre, tau), post));
         }
       }
 
