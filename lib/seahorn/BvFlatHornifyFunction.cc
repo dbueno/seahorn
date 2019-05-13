@@ -240,8 +240,8 @@ namespace seahorn
     for (const CutPoint &cp : cpg)
     {
       cpgOrder [&cp.bb ()] = idx;
-      cpg_location[&cp.bb()] = mkTerm<std::string>("pc" + std::to_string(idx),
-                                                  m_efac);
+      cpg_location[&cp.bb()] = bind::boolConst
+          (mkTerm<std::string> ("pc" + std::to_string (idx), m_efac));
       m_tdb.registerLocation(cpg_location[&cp.bb()]);
       idx++;
 
@@ -273,13 +273,11 @@ namespace seahorn
       m_db.registerRelation (step);
     }
 
-
     const BasicBlock &entry = F.getEntryBlock ();
 
     ExprSet allVars;
     ExprVector args;
     SymStore s (m_efac);
-
 
     s.write (pc, mkTerm<mpz_class> (cpgOrder [&entry], m_efac));
     args.push_back (s.read (pc));
@@ -291,13 +289,13 @@ namespace seahorn
     m_db.addRule (allVars, rule);
     allVars.clear ();
 
-    //s.write(cpg_location[&entry], mk<TRUE>(m_efac));
-    //m_tdb.addTransition(cpg_location[&entry], mk<TRUE>(m_efac),
-                        //s.read(cpg_location[&entry]));
+    s.write(cpg_location [&entry], mk<TRUE> (m_efac));
+    ExprVector my_args;
+    my_args.push_back (s.read (cpg_location [&entry]));
+    m_tdb.addTransition (cpg_location [&entry], my_args);
 
     VCGen vcgen(m_sem);
     ExprSet my_vars;
-    ExprVector my_args;
 
     for (const CutPoint &cp : cpg)
       {
@@ -306,6 +304,7 @@ namespace seahorn
         {
           allVars.clear ();
           args.clear ();
+          my_args.clear ();
           s.reset ();
 
           s.write (pc, mkTerm<mpz_class> (cpgOrder [&cp.bb ()], m_efac));
@@ -336,7 +335,7 @@ namespace seahorn
 
           s.write(cpg_location[&dst], mk<TRUE>(m_efac));
           Expr at_dst = s.read(cpg_location[&dst]);
-          m_tdb.addTransition(boolop::land(pre, tau), args);
+          m_tdb.addTransition(tau, args);
 
           Expr post = bind::fapp (step, args);
           m_db.addRule (allVars, boolop::limp (boolop::land (pre, tau), post));

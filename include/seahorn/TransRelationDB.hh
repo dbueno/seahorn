@@ -37,10 +37,24 @@ class TransRelationDB {
 
   template <typename S>
   void loadZSolver(S &solver) {
+    auto& os = std::cout;
     for (auto& t : getTransitions()) {
+      os << "transition thing: ";
+      t.first->Print(os);
+      os << "\nvalue:\n";
       for (auto& c : t.second) {
-        solver.assertExpr(boolop::limp(t.first, c));
+        c->Print(os);
+        os << "\n";
+        std::flush(os);
+        //solver.assertExpr(c);
       }
+      os << "\n";
+    }
+
+    for (auto& l : m_locations) {
+      l->Print(os);
+        os << "\n";
+        std::flush(os);
     }
   }
 
