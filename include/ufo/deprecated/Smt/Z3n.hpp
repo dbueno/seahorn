@@ -693,14 +693,20 @@ public:
           out << "Real ";
         else if (isOpX<INT_TY>(ty))
           out << "Int ";
+        else if (isOpX<BVSORT>(ty))
+          out << "(_ BitVec " << bv::width(ty) << ") ";
         else if (isOpX<ARRAY_TY>(ty)) {
           out << "(Array ";
           if (isOpX<INT_TY>(sort::arrayIndexTy(ty)))
             out << "Int ";
+          else if (isOpX<BVSORT>(sort::arrayIndexTy(ty)))
+            out << "(_ BitVec " << bv::width(sort::arrayIndexTy(ty)) << ") ";
           else
             out << "UfoUnknownSort ";
           if (isOpX<INT_TY>(sort::arrayValTy(ty)))
             out << "Int";
+          else if (isOpX<BVSORT>(sort::arrayValTy(ty)))
+            out << "(_ BitVec " << bv::width(sort::arrayValTy(ty)) << ") ";
           else
             out << "UfoUnknownSort";
           out << ") ";
@@ -725,14 +731,20 @@ public:
         out << "Real ";
       else if (isOpX<INT_TY>(ty))
         out << "Int ";
+      else if (isOpX<BVSORT>(ty))
+        out << "(_ BitVec " << bv::width(ty) << ") ";
       else if (isOpX<ARRAY_TY>(ty)) {
         out << "(Array ";
         if (isOpX<INT_TY>(sort::arrayIndexTy(ty)))
           out << "Int ";
+        else if (isOpX<BVSORT>(sort::arrayIndexTy(ty)))
+          out << "(_ BitVec " << bv::width(sort::arrayIndexTy(ty)) << ") ";
         else
           out << "UfoUnknownSort ";
         if (isOpX<INT_TY>(sort::arrayValTy(ty)))
           out << "Int";
+        else if (isOpX<BVSORT>(sort::arrayValTy(ty)))
+          out << "(_ BitVec " << bv::width(sort::arrayValTy(ty)) << ") ";
         else
           out << "UfoUnknownSort";
         out << ") ";

@@ -5,6 +5,8 @@
 
 #include "seahorn/Support/SeaDebug.h"
 
+using namespace std;
+
 namespace seahorn
 {
 
@@ -217,27 +219,6 @@ namespace seahorn
     else if (!exit & m_interproc) assert (0);
 
   }
-    
-
-using namespace std;
-void BvFlatLargeHornifyFunction::walkToRoots(
-    ExprSet& vars, SymStore& s, ExprVector& rooted_out) {
-  auto lookup = [&](const Expr& e) {
-    if (s.isDefined(e)) {
-      assert(false);
-      return VisitAction::changeTo(s.read(e));
-    }
-    return VisitAction::doKids();
-  };
-  // print defs
-  for (const Expr& d : s.defs()) {
-    cerr << "def: " << *d << "\n";
-  }
-  DagVisit<decltype(lookup)> find_def_visitor(lookup);
-  for (const Expr& v : vars) {
-    rooted_out.push_back(find_def_visitor(v));
-  }
-}
 
   void BvFlatLargeHornifyFunction::runOnFunction (Function &F)
   {
@@ -253,21 +234,13 @@ void BvFlatLargeHornifyFunction::walkToRoots(
     const LiveSymbols &ls = m_parent.getLiveSybols (F);
 
     DenseMap<const BasicBlock*, unsigned> cpgOrder;
-    DenseMap<const BasicBlock*, Expr> cpg_location;
-    DenseMap<const BasicBlock*, Expr> cpg_location_next;
     // globally live
     ExprSet glive;
 
     unsigned idx = 0;
     for (const CutPoint &cp : cpg)
     {
-      cpgOrder [&cp.bb ()] = idx;
-      cpg_location [&cp.bb()] = bind::boolConst
-          (mkTerm<std::string> ("pc" + std::to_string (idx), m_efac));
-      cpg_location_next [&cp.bb()] = bind::boolConst
-          (mkTerm<std::string> ("pc" + std::to_string (idx) + ".next", m_efac));
-      m_tdb.registerLocation(cpg_location[&cp.bb()]);
-      idx++;
+      cpgOrder [&cp.bb ()] = idx++;
 
       auto &live = ls.live (&cp.bb ());
       glive.insert (live.begin (), live.end ());
@@ -276,7 +249,11 @@ void BvFlatLargeHornifyFunction::walkToRoots(
     }
 
     // -- process counter
-    Expr pc = bind::intConst (mkTerm<std::string> ("flat.pc", m_efac));
+    int num_bits = static_cast<int>(ceil(log2(idx)));
+    Expr pc = bv::bvConst(mkTerm<std::string>("flat.pc", m_efac), num_bits);
+    auto cpgOrderBv = [&](const BasicBlock *bb) -> Expr {
+      return bv::bvnum(cpgOrder[bb], num_bits, m_efac);
+    };
 
     // -- step predicate. First argument is pc
     Expr step;
@@ -297,13 +274,15 @@ void BvFlatLargeHornifyFunction::walkToRoots(
       m_db.registerRelation (step);
     }
 
+
     const BasicBlock &entry = F.getEntryBlock ();
 
     ExprSet allVars;
     ExprVector args;
     SymStore s (m_efac);
 
-    s.write (pc, mkTerm<mpz_class> (cpgOrder [&entry], m_efac));
+
+    s.write (pc, cpgOrderBv(&entry));
     args.push_back (s.read (pc));
     for (const Expr& v : glive) args.push_back (s.read (v));
     allVars.insert (++args.begin (), args.end ());
@@ -313,13 +292,7 @@ void BvFlatLargeHornifyFunction::walkToRoots(
     m_db.addRule (allVars, rule);
     allVars.clear ();
 
-    s.write(cpg_location [&entry], mk<TRUE> (m_efac));
-    ExprVector my_args;
-    my_args.push_back (s.read (cpg_location [&entry]));
-    //m_tdb.addTransition (cpg_location [&entry], my_args);
-
     VCGen vcgen(m_sem);
-    ExprSet my_vars;
 
     for (const CutPoint &cp : cpg)
       {
@@ -328,18 +301,12 @@ void BvFlatLargeHornifyFunction::walkToRoots(
         {
           allVars.clear ();
           args.clear ();
-          my_args.clear ();
           s.reset ();
 
-          s.write (pc, mkTerm<mpz_class> (cpgOrder [&cp.bb ()], m_efac));
+          s.write (pc, cpgOrderBv(&cp.bb ()));
           args.push_back (s.read (pc));
           for (const Expr &v : glive) args.push_back (s.read (v));
           allVars.insert (++args.begin (), args.end ());
-
-          ExprSet allVarsCopy(allVars);
-          s.write (cpg_location [&cp.bb()], mk<TRUE> (m_efac));
-          Expr at_loc = cpg_location [&cp.bb()];
-          for (const Expr& v : glive) my_args.push_back(s.read(v));
 
           Expr pre = bind::fapp (step, args);
 
@@ -350,35 +317,16 @@ void BvFlatLargeHornifyFunction::walkToRoots(
           expr::filter (tau, bind::IsConst(),
                         std::inserter (allVars, allVars.begin ()));
 
-          // I wanted to look at the variables mapped in the store and use
-          // those to recover a definition of each next-state in terms of
-          // current-state variables. But now it looks like the stores are
-          // empty?? And VCGen only seems to call "addSide" on the context. So,
-          // yeah, it's not putting things in the store like that. Sigh.
-          ExprVector rooted;
-          walkToRoots(allVarsCopy, s, rooted);
-          int i = 0;
-          for (const Expr& e : allVarsCopy) {
-            using namespace std;
-            cerr << *e << " maps to " << rooted[i++] << "\n";
-          }
-
           const BasicBlock &dst = edge->target ().bb ();
           args.clear ();
 
-          s.write (pc, mkTerm<mpz_class> (cpgOrder [&dst], m_efac));
+          s.write (pc, cpgOrderBv(&dst));
           args.push_back (s.read (pc));
           for (const Expr &v : glive) args.push_back (s.read (v));
           allVars.insert (++args.begin (), args.end ());
 
-          Expr loc_pre = boolop::land (at_loc, tau);
-          s.write (cpg_location [&dst], mk<TRUE> (m_efac));
-          Expr at_dst = cpg_location_next [&dst];
-          args.push_back(at_dst);
-          m_tdb.addTransition (loc_pre, args);
-
-          //Expr post = bind::fapp (step, args);
-          //m_db.addRule (allVars, boolop::limp (boolop::land (pre, tau), post));
+          Expr post = bind::fapp (step, args);
+          m_db.addRule (allVars, boolop::limp (boolop::land (pre, tau), post));
         }
       }
 
@@ -400,7 +348,7 @@ void BvFlatLargeHornifyFunction::walkToRoots(
       allVars.clear ();
       args.clear ();
 
-      s.write (pc, mkTerm<mpz_class> (cpgOrder [&cp.bb ()], m_efac));
+      s.write (pc, cpgOrderBv (&cp.bb ()));
       args.push_back (s.read (pc));
       for (const Expr &v : glive) args.push_back (s.read (v));
       allVars.insert (++args.begin (), args.end ());
@@ -410,7 +358,7 @@ void BvFlatLargeHornifyFunction::walkToRoots(
 
       args.clear ();
 
-      s.write (pc, mkTerm<mpz_class> (cpgOrder [exit], m_efac));
+      s.write (pc, cpgOrderBv (exit));
       args.push_back (s.read (pc));
       for (const Expr &v : glive) args.push_back (s.read (v));
       allVars.insert (++args.begin (), args.end ());
@@ -424,7 +372,7 @@ void BvFlatLargeHornifyFunction::walkToRoots(
       args.clear ();
       s.reset ();
 
-      s.write (pc, mkTerm<mpz_class> (cpgOrder [exit], m_efac));
+      s.write (pc, cpgOrderBv (exit));
       args.push_back (s.read (pc));
       if (ls.live (exit).size () == 1)
         s.write (m_sem.errorFlag (*exit), mk<TRUE> (m_efac));
@@ -441,7 +389,7 @@ void BvFlatLargeHornifyFunction::walkToRoots(
       args.clear ();
       allVars.clear ();
 
-      s.write (pc, mkTerm<mpz_class> (cpgOrder [exit], m_efac));
+      s.write (pc, cpgOrderBv (exit));
       args.push_back (s.read (pc));
       for (const Expr &v : glive) args.push_back (s.read (v));
       allVars.insert (++args.begin (), args.end ());
