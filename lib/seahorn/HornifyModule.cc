@@ -50,6 +50,7 @@ namespace hm_detail {
 enum Step {
   SMALL_STEP,
   LARGE_STEP,
+  BV_LARGE_STEP,
   CLP_SMALL_STEP,
   CLP_FLAT_SMALL_STEP,
   FLAT_SMALL_STEP,
@@ -64,6 +65,8 @@ static llvm::cl::opt<enum hm_detail::Step> Step(
     cl::values(
         clEnumValN(hm_detail::SMALL_STEP, "small", "Small Step"),
         clEnumValN(hm_detail::LARGE_STEP, "large", "Large Step"),
+        clEnumValN(hm_detail::BV_LARGE_STEP, "bvlarge",
+                   "Bit Vector Large Step"),
         clEnumValN(hm_detail::FLAT_SMALL_STEP, "fsmall", "Flat Small Step"),
         clEnumValN(hm_detail::FLAT_LARGE_STEP, "flarge", "Flat Large Step"),
         clEnumValN(hm_detail::BV_FLAT_LARGE_STEP, "bvflarge",
@@ -146,7 +149,8 @@ bool HornifyModule::runOnModule(Module &M) {
   if (Step == hm_detail::CLP_SMALL_STEP ||
       Step == hm_detail::CLP_FLAT_SMALL_STEP)
     m_sem.reset(new ClpOpSem(m_efac, *this, M.getDataLayout(), TL));
-  else if (Step == hm_detail::BV_FLAT_LARGE_STEP)
+  else if (Step == hm_detail::BV_LARGE_STEP ||
+           Step == hm_detail::BV_FLAT_LARGE_STEP)
     m_sem.reset(new BvOpSem(m_efac, *this, M.getDataLayout(), TL));
   else
     m_sem.reset(new UfoOpSem(m_efac, *this, M.getDataLayout(), TL, abs_fns));
@@ -365,7 +369,8 @@ bool HornifyModule::runOnFunction(Function &F) {
 
   boost::scoped_ptr<HornifyFunction> hf(
       new SmallHornifyFunction(*this, InterProc));
-  if (Step == hm_detail::LARGE_STEP)
+  if (Step == hm_detail::LARGE_STEP ||
+      Step == hm_detail::BV_LARGE_STEP)
     hf.reset(new LargeHornifyFunction(*this, InterProc));
   else if (Step == hm_detail::FLAT_SMALL_STEP ||
            Step == hm_detail::CLP_FLAT_SMALL_STEP)
